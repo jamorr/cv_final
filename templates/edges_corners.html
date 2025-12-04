@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edges & Corners Detection</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 0;
+        padding: 40px;
+      }
+      .container {
+        max-width: 1200px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #444;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+      p.description {
+        text-align: center;
+        color: #666;
+        margin-bottom: 30px;
+      }
+
+      .form-section {
+        margin-bottom: 30px;
+        text-align: center;
+        background: #fafafa;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #eee;
+      }
+
+      input[type="file"] {
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+      }
+
+      button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+
+      .results-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        justify-content: center;
+        margin-top: 20px;
+      }
+
+      .result-box {
+        flex: 1;
+        min-width: 300px;
+        text-align: center;
+        border: 1px solid #ddd;
+        padding: 15px;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .result-box h3 {
+        color: #555;
+        margin-top: 0;
+        text-transform: uppercase;
+        font-size: 0.9em;
+        letter-spacing: 1px;
+      }
+
+      .result-box img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .nav-link {
+        display: inline-block;
+        margin-bottom: 20px;
+        text-decoration: none;
+        color: #555;
+        font-weight: bold;
+      }
+      .nav-link:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <a href="/" class="nav-link">&larr; Back to Home</a>
+
+      <h1>Edges & Corners Detection</h1>
+
+      <a
+        ref="https://drive.google.com/file/d/1ETX9QW9xBl2AhA0_zZhl-DyDo5_pB3tA/view?usp=sharing"
+        >DEMO</a
+      >
+      <div class="form-section">
+        <form method="POST" enctype="multipart/form-data">
+          <input type="file" name="image" accept="image/*" required />
+          <button type="submit">Analyze Image</button>
+        </form>
+      </div>
+
+      {% if original_b64 %}
+      <div class="results-grid">
+        <div class="result-box">
+          <h3>Original Image</h3>
+          <img src="data:image/jpeg;base64,{{ original_b64 }}" alt="Original" />
+        </div>
+
+        <div class="result-box">
+          <h3>Edge Detection (Canny)</h3>
+          <img
+            src="data:image/jpeg;base64,{{ edges_b64 }}"
+            alt="Edges Result"
+          />
+          <p style="font-size: 0.8em; color: #777; margin-top: 10px">
+            Detects sharp changes in intensity (gradients).
+          </p>
+        </div>
+
+        <div class="result-box">
+          <h3>Corner Detection (Harris)</h3>
+          <img
+            src="data:image/jpeg;base64,{{ corners_b64 }}"
+            alt="Corners Result"
+          />
+          <p style="font-size: 0.8em; color: #777; margin-top: 10px">
+            Detects points with significant intensity change in all directions
+            (Red Dots).
+          </p>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </body>
+</html>

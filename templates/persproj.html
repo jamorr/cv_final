@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Perspective Projection Size Estimator</title>
+    <a
+      ref="https://drive.google.com/file/d/1UAFDX6WYExq3l-e0OGg3ngvVPnO82noB/view?usp=sharing"
+      >DEMO</a
+    >
+    <style>
+      body {
+        font-family: sans-serif;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 0;
+        padding: 40px;
+      }
+      .container {
+        max-width: 900px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #444;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+      p.description {
+        text-align: center;
+        color: #666;
+        margin-bottom: 30px;
+      }
+
+      .form-section {
+        margin-bottom: 20px;
+        background: #fafafa;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #eee;
+      }
+      label {
+        font-weight: bold;
+        display: block;
+        margin-bottom: 10px;
+        color: #555;
+      }
+
+      input[type="file"],
+      input[type="number"],
+      textarea {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        background: #fff;
+        font-family: inherit;
+      }
+
+      textarea {
+        resize: vertical;
+        height: 100px;
+        font-family: monospace;
+        font-size: 0.9em;
+      }
+
+      .button-container {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 20px;
+      }
+      button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+
+      button.secondary {
+        background-color: #6c757d;
+      }
+      button.secondary:hover {
+        background-color: #5a6268;
+      }
+
+      .canvas-container {
+        position: relative;
+        margin-top: 20px;
+        border: 2px dashed #ddd;
+        min-height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #fff;
+        overflow: hidden;
+      }
+
+      canvas {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        cursor: crosshair;
+      }
+
+      .placeholder-text {
+        color: #999;
+        position: absolute;
+        pointer-events: none;
+      }
+
+      .result-box {
+        text-align: center;
+        font-size: 1.2em;
+        font-weight: bold;
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 5px;
+      }
+      .success {
+        color: #155724;
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+      }
+      .error {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+      }
+
+      .nav-link {
+        display: inline-block;
+        margin-bottom: 20px;
+        text-decoration: none;
+        color: #555;
+        font-weight: bold;
+      }
+      .nav-link:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <a href="/" class="nav-link">&larr; Back to Home</a>
+
+      <h1>Perspective Projection: Object Size Estimator</h1>
+      <p class="description">
+        Upload an image, provide calibration data, and select two points on an
+        object to estimate its size.
+      </p>
+
+      <form id="size-form" enctype="multipart/form-data">
+        <div class="form-section">
+          <label for="cameraMatrix"
+            >Camera Intrinsic Matrix (JSON format)</label
+          >
+          <textarea id="cameraMatrix" name="cameraMatrix">
+{{calibration}}</textarea
+          >
+
+          <label for="distance">Distance to Object (cm)</label>
+          <input
+            type="number"
+            id="distance"
+            name="distance"
+            value="100"
+            step="0.1"
+            required
+          />
+
+          <label for="file">Upload Image</label>
+          <input type="file" name="file" id="file" accept="image/*" required />
+        </div>
+
+        <div class="canvas-container" id="canvasWrapper">
+          <span class="placeholder-text">Image Preview Area</span>
+          <canvas id="image-canvas"></canvas>
+        </div>
+
+        <input type="hidden" id="point1" name="point1" />
+        <input type="hidden" id="point2" name="point2" />
+
+        <div class="button-container">
+          <button type="submit" id="calculate-btn" disabled>
+            Calculate Size
+          </button>
+          <button type="button" id="reset-btn" class="secondary">
+            Reset Points
+          </button>
+        </div>
+      </form>
+
+      <div id="result-display"></div>
+    </div>
+
+    <script>
+      const form = document.getElementById("size-form");
+      const fileInput = document.getElementById("file");
+      const canvas = document.getElementById("image-canvas");
+      const ctx = canvas.getContext("2d");
+      const calculateBtn = document.getElementById("calculate-btn");
+      const resetBtn = document.getElementById("reset-btn");
+      const resultDisplay = document.getElementById("result-display");
+      const placeholder = document.querySelector(".placeholder-text");
+
+      let points = [];
+      let imgObj = null;
+
+      // 1. Handle File Upload
+      fileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            imgObj = new Image();
+            imgObj.onload = () => {
+              // Set canvas resolution to match actual image resolution
+              canvas.width = imgObj.width;
+              canvas.height = imgObj.height;
+
+              placeholder.style.display = "none";
+              resetPoints(); // Redraw image and clear old points
+            };
+            imgObj.src = event.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      // 2. Handle Clicks (Robust Coordinate Calculation)
+      canvas.addEventListener("mousedown", (e) => {
+        if (!imgObj || points.length >= 2) return;
+
+        // Get the bounding box of the canvas as it appears on screen
+        const rect = canvas.getBoundingClientRect();
+
+        // Calculate scale factor (Internal Resolution / Display Resolution)
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        // Calculate actual coordinates
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        points.push({ x: Math.round(x), y: Math.round(y) });
+        redraw();
+
+        if (points.length === 2) {
+          document.getElementById("point1").value = JSON.stringify(points[0]);
+          document.getElementById("point2").value = JSON.stringify(points[1]);
+          calculateBtn.disabled = false;
+        }
+      });
+
+      // 3. Right Click to Undo
+      canvas.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        if (points.length > 0) {
+          points.pop();
+          redraw();
+          calculateBtn.disabled = true;
+          document.getElementById("point1").value = "";
+          document.getElementById("point2").value = "";
+          resultDisplay.className = "";
+          resultDisplay.textContent = "";
+        }
+      });
+
+      function redraw() {
+        if (!imgObj) return;
+
+        // Clear and draw image
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(imgObj, 0, 0);
+
+        // Draw points and line
+        if (points.length > 0) {
+          ctx.fillStyle = "red";
+          ctx.strokeStyle = "yellow";
+          ctx.lineWidth = 3;
+
+          // Draw dots
+          points.forEach((p) => {
+            ctx.beginPath();
+            ctx.arc(
+              p.x,
+              p.y,
+              Math.max(5, canvas.width * 0.005),
+              0,
+              2 * Math.PI,
+            ); // Scale dot size slightly with image
+            ctx.fill();
+          });
+
+          // Draw line between
+          if (points.length === 2) {
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            ctx.lineTo(points[1].x, points[1].y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      function resetPoints() {
+        points = [];
+        redraw();
+        calculateBtn.disabled = true;
+        document.getElementById("point1").value = "";
+        document.getElementById("point2").value = "";
+        resultDisplay.className = "";
+        resultDisplay.textContent = "";
+      }
+
+      resetBtn.addEventListener("click", resetPoints);
+
+      // 4. Handle Submission
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        resultDisplay.className = "";
+        resultDisplay.textContent = "Calculating...";
+
+        const formData = new FormData(form);
+
+        try {
+          const response = await fetch("/persproj", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await response.json();
+
+          if (data.error) {
+            resultDisplay.className = "result-box error";
+            resultDisplay.textContent = `Error: ${data.error}`;
+          } else if (data.size_cm) {
+            resultDisplay.className = "result-box success";
+            resultDisplay.textContent = `Estimated Object Size: ${data.size_cm} cm`;
+          }
+        } catch (err) {
+          resultDisplay.className = "result-box error";
+          resultDisplay.textContent =
+            "An unexpected error occurred. See console for details.";
+          console.error(err);
+        }
+      });
+    </script>
+  </body>
+</html>

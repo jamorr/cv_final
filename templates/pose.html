@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Client-Side Pose Estimation</title>
+
+    <!-- MediaPipe Holistic & Camera Utils -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+      crossorigin="anonymous"
+    ></script>
+
+    <style>
+      body {
+        font-family: sans-serif;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 1200px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #444;
+        text-align: center;
+      }
+      p.description {
+        text-align: center;
+        color: #666;
+        margin-bottom: 20px;
+      }
+
+      .workspace {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        justify-content: center;
+      }
+
+      .video-wrapper {
+        position: relative;
+        width: 640px;
+        height: 480px;
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+      }
+
+      /* Hide the raw video element, we only show the canvas */
+      #input_video {
+        display: none;
+      }
+
+      #output_canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .controls {
+        margin: 20px 0;
+        text-align: center;
+      }
+
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin: 0 10px;
+        transition: background 0.2s;
+      }
+      button.start {
+        background-color: #28a745;
+        color: white;
+      }
+      button.start:hover {
+        background-color: #218838;
+      }
+
+      button.stop {
+        background-color: #dc3545;
+        color: white;
+      }
+      button.stop:hover {
+        background-color: #c82333;
+      }
+
+      button.download {
+        background-color: #007bff;
+        color: white;
+        display: none;
+      }
+      button.download:hover {
+        background-color: #0056b3;
+      }
+
+      .data-panel {
+        flex: 1;
+        min-width: 300px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .data-header {
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #555;
+      }
+
+      #landmark_data {
+        width: 100%;
+        height: 440px;
+        font-family: monospace;
+        font-size: 0.85em;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #f8f9fa;
+        resize: none;
+        white-space: pre;
+        overflow-x: auto;
+      }
+
+      .loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-weight: bold;
+        display: none;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <a href="/" style="text-decoration: none; color: #555; font-weight: bold"
+        >&larr; Back to Home</a
+      >
+      <h1>Pose & Hand Tracking</h1>
+      <a
+        ref="https://drive.google.com/file/d/1UAFDX6WYExq3l-e0OGg3ngvVPnO82noB/view?usp=sharing&t=463"
+        >DEMO</a
+      >
+      <div class="controls">
+        <button class="start" onclick="startCamera()">Start Camera</button>
+        <button class="stop" onclick="stopCamera()">Stop Camera</button>
+        <button class="download" id="downloadBtn" onclick="downloadCSV()">
+          Download CSV
+        </button>
+      </div>
+
+      <div class="workspace">
+        <div class="video-wrapper">
+          <video id="input_video"></video>
+          <canvas id="output_canvas" width="640" height="480"></canvas>
+          <div class="loading" id="loader">Loading Models...</div>
+        </div>
+
+        <!-- Data Output -->
+        <div class="data-panel">
+          <textarea
+            id="landmark_data"
+            readonly
+            placeholder="CSV data will stream here..."
+          ></textarea>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const videoElement = document.getElementById("input_video");
+      const canvasElement = document.getElementById("output_canvas");
+      const canvasCtx = canvasElement.getContext("2d");
+      const dataBox = document.getElementById("landmark_data");
+      const loader = document.getElementById("loader");
+      const downloadBtn = document.getElementById("downloadBtn");
+
+      let camera = null;
+      let isRunning = false;
+      let startTime = 0;
+
+      // We accumulate all CSV data here
+      let fullCsvLog = "";
+      const HEADER =
+        "Time_Elapsed_Seconds,Body_Part_Type,Landmark_Number,Horizontal_Position_X,Vertical_Position_Y,Depth_Position_Z\n";
+
+      // Initialize MediaPipe Holistic
+      const holistic = new Holistic({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
+        },
+      });
+
+      holistic.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        smoothSegmentation: false,
+        refineFaceLandmarks: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      holistic.onResults(onResults);
+
+      function startCamera() {
+        if (isRunning) return;
+
+        loader.style.display = "block";
+        downloadBtn.style.display = "none";
+
+        // Initialize CSV with headers
+        fullCsvLog = HEADER;
+        dataBox.value = "";
+
+        camera = new Camera(videoElement, {
+          onFrame: async () => {
+            if (isRunning) await holistic.send({ image: videoElement });
+          },
+          width: 640,
+          height: 480,
+        });
+
+        camera.start().then(() => {
+          isRunning = true;
+          startTime = Date.now();
+          loader.style.display = "none";
+        });
+      }
+
+      function stopCamera() {
+        if (camera) {
+          camera.stop();
+          isRunning = false;
+          camera = null;
+          // Clear canvas
+          canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+          // Show the full accumulated data
+          dataBox.value = fullCsvLog;
+          downloadBtn.style.display = "inline-block";
+        }
+      }
+
+      function downloadCSV() {
+        const blob = new Blob([fullCsvLog], { type: "text/csv" });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.setAttribute("hidden", "");
+        a.setAttribute("href", url);
+        a.setAttribute("download", "pose_data.csv");
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      function onResults(results) {
+        if (!isRunning) return;
+
+        // 1. Draw Results on Canvas
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.drawImage(
+          results.image,
+          0,
+          0,
+          canvasElement.width,
+          canvasElement.height,
+        );
+
+        // Connectors & Landmarks (Pose)
+        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {
+          color: "#00FF00",
+          lineWidth: 2,
+        });
+        drawLandmarks(canvasCtx, results.poseLandmarks, {
+          color: "#FF0000",
+          lineWidth: 1,
+          radius: 3,
+        });
+
+        // Connectors & Landmarks (Hands)
+        drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS, {
+          color: "#CC0000",
+          lineWidth: 2,
+        });
+        drawLandmarks(canvasCtx, results.leftHandLandmarks, {
+          color: "#00FF00",
+          lineWidth: 1,
+          radius: 3,
+        });
+        drawConnectors(
+          canvasCtx,
+          results.rightHandLandmarks,
+          HAND_CONNECTIONS,
+          { color: "#00CC00", lineWidth: 2 },
+        );
+        drawLandmarks(canvasCtx, results.rightHandLandmarks, {
+          color: "#FF0000",
+          lineWidth: 1,
+          radius: 3,
+        });
+
+        canvasCtx.restore();
+
+        // 2. Process Data for CSV
+        const timestamp = ((Date.now() - startTime) / 1000).toFixed(3);
+        let frameCsv = "";
+
+        // Helper to format rows
+        const appendData = (type, landmarks) => {
+          if (!landmarks) return;
+          landmarks.forEach((lm, index) => {
+            const x = lm.x.toFixed(4);
+            const y = lm.y.toFixed(4);
+            const z = lm.z.toFixed(4);
+            frameCsv += `${timestamp},${type},${index},${x},${y},${z}\n`;
+          });
+        };
+
+        if (results.poseLandmarks) appendData("POSE", results.poseLandmarks);
+        if (results.leftHandLandmarks)
+          appendData("LEFT_HAND", results.leftHandLandmarks);
+        if (results.rightHandLandmarks)
+          appendData("RIGHT_HAND", results.rightHandLandmarks);
+
+        // Accumulate full history
+        fullCsvLog += frameCsv;
+
+        // Live View: Only show current frame to prevent browser lag
+        // We prepend headers so the live view makes sense
+        dataBox.value = HEADER + frameCsv;
+      }
+    </script>
+  </body>
+</html>

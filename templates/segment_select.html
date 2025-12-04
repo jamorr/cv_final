@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interactive Object Segmentation</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 1200px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        text-align: center;
+        color: #444;
+      }
+      .description {
+        text-align: center;
+        color: #666;
+        margin-bottom: 20px;
+      }
+
+      .upload-section {
+        text-align: center;
+        margin-bottom: 20px;
+        padding: 20px;
+        background: #fafafa;
+        border: 1px dashed #ccc;
+        border-radius: 8px;
+      }
+
+      .workspace {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        justify-content: center;
+        display: none;
+      }
+
+      .canvas-container {
+        position: relative;
+        border: 1px solid #ccc;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      canvas {
+        display: block;
+        cursor: crosshair;
+        max-width: 100%;
+        height: auto;
+      }
+
+      .results-panel {
+        flex: 1;
+        min-width: 300px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        align-items: center;
+      }
+
+      .result-box {
+        text-align: center;
+        border: 1px solid #eee;
+        padding: 10px;
+        border-radius: 8px;
+        background: #fff;
+        width: 100%;
+      }
+
+      .result-box img {
+        max-width: 100%;
+        height: auto;
+        max-height: 300px;
+        background-image:
+          linear-gradient(45deg, #eee 25%, transparent 25%),
+          linear-gradient(-45deg, #eee 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #eee 75%),
+          linear-gradient(-45deg, transparent 75%, #eee 75%);
+        background-size: 20px 20px;
+        background-position:
+          0 0,
+          0 10px,
+          10px -10px,
+          -10px 0px;
+        border: 1px solid #ddd;
+      }
+
+      .loading {
+        display: none;
+        color: #007bff;
+        font-weight: bold;
+        margin-top: 10px;
+      }
+
+      button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+
+      .instruction {
+        background: #e7f5ff;
+        color: #004085;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        text-align: center;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <a href="/" style="text-decoration: none; color: #555; font-weight: bold"
+        >&larr; Back to Home</a
+      >
+      <h1>Interactive Segmentation</h1>
+      <a
+        ref="https://drive.google.com/file/d/1UAFDX6WYExq3l-e0OGg3ngvVPnO82noB/view?usp=sharing&t=225"
+        >DEMO</a
+      >
+      <p class="description">
+        Upload an image, then click on an object. We use SIFT features to create
+        a "blob" mask and refine it with GrabCut.
+      </p>
+
+      <div class="upload-section">
+        <input type="file" id="imageInput" accept="image/*" />
+        <button onclick="uploadImage()">Upload & Start</button>
+      </div>
+
+      <div class="instruction" id="instructionMsg">
+        Click on the object you want to segment in the image below.
+      </div>
+
+      <div class="workspace" id="workspace">
+        <div class="canvas-container">
+          <canvas id="mainCanvas"></canvas>
+        </div>
+
+        <div class="results-panel">
+          <div class="result-box">
+            <h3>Segmented Object</h3>
+            <img id="resultImg" alt="Result will appear here" />
+            <div class="loading" id="loading">Processing...</div>
+          </div>
+          <div class="result-box">
+            <h3>SIFT/GrabCut Mask (Debug)</h3>
+            <img id="maskImg" alt="Mask visualization" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let sessionId = null;
+      let originalWidth = 0;
+      let originalHeight = 0;
+      const canvas = document.getElementById("mainCanvas");
+      const ctx = canvas.getContext("2d");
+
+      async function uploadImage() {
+        const input = document.getElementById("imageInput");
+        if (input.files.length === 0) return alert("Please select a file.");
+
+        const formData = new FormData();
+        formData.append("image", input.files[0]);
+
+        try {
+          const response = await fetch("/segment_select", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await response.json();
+
+          if (data.error) return alert(data.error);
+
+          sessionId = data.session_id;
+          originalWidth = data.width;
+          originalHeight = data.height;
+
+          // Load image onto canvas
+          const img = new Image();
+          img.onload = () => {
+            // Set canvas resolution to match image resolution
+            // CSS will handle the display size (responsive)
+            canvas.width = originalWidth;
+            canvas.height = originalHeight;
+            ctx.drawImage(img, 0, 0);
+
+            document.getElementById("workspace").style.display = "flex";
+            document.getElementById("instructionMsg").style.display = "block";
+            document.querySelector(".upload-section").style.display = "none";
+          };
+          img.src = "data:image/jpeg;base64," + data.image_b64;
+        } catch (err) {
+          console.error(err);
+          alert("Upload failed.");
+        }
+      }
+
+      canvas.addEventListener("mousedown", async (e) => {
+        if (!sessionId) return;
+
+        // Calculate click coordinates relative to the actual image resolution
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        // Visual feedback (draw a red cross temporarily)
+        // We redraw the original image first to clear old crosses?
+        // For simplicity, we just draw on top.
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, 2 * Math.PI);
+        ctx.fill();
+
+        document.getElementById("loading").style.display = "block";
+
+        try {
+          const response = await fetch("/segment_select/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              session_id: sessionId,
+              x: x,
+              y: y,
+            }),
+          });
+          const data = await response.json();
+
+          if (data.error) {
+            alert("Processing error: " + data.error);
+          } else {
+            document.getElementById("resultImg").src =
+              "data:image/jpeg;base64," + data.segmented_b64;
+            document.getElementById("maskImg").src =
+              "data:image/jpeg;base64," + data.mask_b64;
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Processing failed.");
+        } finally {
+          document.getElementById("loading").style.display = "none";
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser-Based Object Tracker</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        color: white;
+        background-color: #1a1a1a;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        padding-bottom: 50px;
+      }
+      .container {
+        text-align: center;
+        margin-top: 20px;
+        width: 90%;
+        max-width: 800px;
+      }
+      .view-port {
+        position: relative;
+        border: 4px solid #34495e;
+        border-radius: 4px;
+        background: #000;
+        display: inline-block;
+        margin-top: 20px;
+        /* Ensure consistent size */
+        width: 640px;
+        height: 480px;
+      }
+      video {
+        display: none; /* Hidden by default, OpenCV writes to canvas */
+      }
+      canvas {
+        display: block;
+        max-width: 100%;
+        cursor: crosshair;
+      }
+
+      .controls {
+        margin-top: 15px;
+        gap: 10px;
+        display: flex;
+        justify-content: center;
+      }
+      .btn {
+        padding: 10px 20px;
+        cursor: pointer;
+        background: #3498db;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 14px;
+      }
+      .btn:disabled {
+        background: #7f8c8d;
+        cursor: not-allowed;
+      }
+      .btn-active {
+        background: #2ecc71;
+      }
+      .status {
+        margin-top: 15px;
+        color: #f1c40f;
+        font-family: monospace;
+      }
+      .nav-link {
+        color: #ecf0f1;
+        margin-bottom: 20px;
+        display: inline-block;
+      }
+
+      /* SAM2 Specific Styles */
+      .section-divider {
+        margin: 40px 0;
+        border-top: 1px solid #444;
+        width: 100%;
+      }
+      #sam2-container {
+        display: none; /* Hidden until loaded */
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <a href="/" class="nav-link">&larr; Back to Home</a>
+      <h1>Client-Side Tracker</h1>
+
+      <a
+        ref="https://drive.google.com/file/d/1UAFDX6WYExq3l-e0OGg3ngvVPnO82noB/view?usp=sharing&t=351"
+        >DEMO</a
+      >
+      <div class="controls">
+        <button
+          id="btn-marker"
+          class="btn btn-active"
+          onclick="setMode('marker')"
+        >
+          Marker Mode
+        </button>
+        <button id="btn-markerless" class="btn" onclick="setMode('markerless')">
+          Markerless Mode
+        </button>
+      </div>
+
+      <!-- Live Webcam Viewport -->
+      <div class="view-port">
+        <video
+          id="webcam"
+          width="640"
+          height="480"
+          playsinline
+          autoplay
+        ></video>
+        <canvas id="canvas-output" width="640" height="480"></canvas>
+      </div>
+
+      <p id="instruction-text">Initializing...</p>
+      <div id="status" class="status">Step 1: Waiting for OpenCV...</div>
+
+      <!-- SAM2 Demo Section -->
+      <div class="section-divider"></div>
+
+      <h2>SAM2 Segmentation Demo</h2>
+      <button id="btn-load-sam2" class="btn" onclick="initSam2()">
+        Load SAM2 Demo
+      </button>
+      <div id="sam2-status" class="status"></div>
+
+      <div id="sam2-container">
+        <div class="view-port">
+          <!-- SAM2 Source Video (Hidden, drawn to canvas) -->
+          <video
+            id="sam2-video"
+            width="640"
+            height="480"
+            src="{{ url_for('static', filename='tracking_sam2/in24.mp4') }}"
+            loop
+            muted
+            playsinline
+          ></video>
+          <!-- SAM2 Render Canvas -->
+          <canvas id="sam2-canvas" width="640" height="480"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <script type="text/javascript">
+      var Module = {
+        onRuntimeInitialized: function () {
+          console.log("OpenCV Runtime Initialized");
+          document.getElementById("status").innerText =
+            "OpenCV Ready. Starting Camera...";
+
+          if (window.startTracker) {
+            window.startTracker();
+          } else {
+            document.getElementById("status").innerText =
+              "Error: tracker.js failed to load.";
+          }
+        },
+        onError: function (err) {
+          document.getElementById("status").innerText = "OpenCV Error: " + err;
+        },
+      };
+    </script>
+
+    <!-- Original Tracker Logic -->
+    <script src="{{ url_for('static', filename='tracker.js') }}"></script>
+    <!-- New SAM2 Playback Logic -->
+    <script src="{{ url_for('static', filename='sam2_playback.js') }}"></script>
+
+    <script
+      async
+      src="https://docs.opencv.org/4.x/opencv.js"
+      type="text/javascript"
+    ></script>
+  </body>
+</html>

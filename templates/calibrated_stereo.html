@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calibrated Stereo Measurement</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 0;
+        padding: 40px;
+      }
+      .container {
+        max-width: 900px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #444;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+      p.description {
+        text-align: center;
+        color: #666;
+        margin-bottom: 30px;
+      }
+
+      .form-section {
+        margin-bottom: 20px;
+        background: #fafafa;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #eee;
+      }
+      label {
+        font-weight: bold;
+        display: block;
+        margin-bottom: 5px;
+        color: #555;
+        font-size: 0.9em;
+      }
+
+      input[type="file"],
+      input[type="number"],
+      input[type="text"],
+      textarea {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        background: #fff;
+        font-family: inherit;
+      }
+
+      /* Readonly inputs look distinct */
+      input[readonly] {
+        background-color: #e9ecef;
+        color: #495057;
+        cursor: default;
+      }
+
+      textarea {
+        resize: vertical;
+        height: 100px;
+        font-family: monospace;
+        font-size: 0.9em;
+      }
+
+      .button-container {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 20px;
+      }
+      button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+
+      button.secondary {
+        background-color: #6c757d;
+      }
+      button.secondary:hover {
+        background-color: #5a6268;
+      }
+
+      .canvas-container {
+        position: relative;
+        margin-top: 20px;
+        border: 2px dashed #ddd;
+        min-height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #fff;
+        overflow: hidden;
+      }
+
+      canvas {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        cursor: crosshair;
+      }
+      .placeholder-text {
+        color: #999;
+        position: absolute;
+        pointer-events: none;
+      }
+
+      .result-box {
+        text-align: center;
+        font-size: 1.1em;
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 5px;
+      }
+      .success {
+        color: #155724;
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+      }
+      .error {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+      }
+
+      .measurement-list {
+        list-style: none;
+        padding: 0;
+        text-align: left;
+        display: inline-block;
+      }
+      .measurement-list li {
+        margin-bottom: 5px;
+        padding: 5px;
+        border-bottom: 1px solid #c3e6cb;
+      }
+
+      .debug-image {
+        margin-top: 20px;
+        text-align: center;
+      }
+      .debug-image img {
+        max-width: 100%;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+
+      /* Advanced Section Styles */
+      details {
+        border: 1px solid #aaa;
+        border-radius: 4px;
+        padding: 0.5em 0.5em 0;
+        margin-bottom: 20px;
+        background-color: #fff;
+      }
+      summary {
+        font-weight: bold;
+        margin: -0.5em -0.5em 0;
+        padding: 0.5em;
+        cursor: pointer;
+        background-color: #eee;
+        color: #333;
+      }
+      details[open] {
+        padding: 0.5em;
+      }
+
+      .flex-row {
+        display: flex;
+        gap: 20px;
+      }
+      .flex-col {
+        flex: 1;
+      }
+
+      .divider {
+        border-top: 1px solid #eee;
+        margin: 15px 0;
+        position: relative;
+      }
+      .divider span {
+        position: absolute;
+        top: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #fafafa;
+        padding: 0 10px;
+        color: #888;
+        font-size: 0.8em;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <a href="/" style="text-decoration: none; color: #555; font-weight: bold"
+        >&larr; Back to Home</a
+      >
+
+      <h1>Calibrated Stereo: Hub & Spoke Measure</h1>
+      <a
+        ref="https://drive.google.com/file/d/1UAFDX6WYExq3l-e0OGg3ngvVPnO82noB/view?usp=sharing&t=397"
+        >DEMO</a
+      >
+      <p class="description">
+        Upload a stereo pair. First click sets the <strong>Hub</strong>.
+        Subsequent clicks set <strong>Spokes</strong>.
+      </p>
+
+      <form id="stereo-form" enctype="multipart/form-data">
+        <div class="form-section">
+          <label for="cameraMatrix">Camera Intrinsic Matrix (JSON)</label>
+          <textarea id="cameraMatrix" name="cameraMatrix">
+{{calibration}}</textarea
+          >
+
+          <!-- Main Geometry Inputs -->
+          <div class="flex-row">
+            <div class="flex-col">
+              <label for="hub_distance">Distance: Left Camera ↔ Hub (cm)</label>
+              <input
+                type="number"
+                id="hub_distance"
+                name="hub_distance"
+                step="0.1"
+                placeholder="Leave empty if using Baseline"
+              />
+            </div>
+          </div>
+
+          <!-- Educational / Advanced Section -->
+          <details>
+            <summary>Advanced Inputs (Click to Expand)</summary>
+            <div style="margin-top: 15px">
+              <p style="font-size: 0.9em; color: #666; margin-top: 0">
+                <strong>Mode 1 (Standard):</strong> Leave
+                <em>Baseline</em> empty. Enter <em>Hub Distance</em> above.
+                <br />
+                <strong>Mode 2 (Reverse):</strong> Enter
+                <em>Baseline</em> below. Leave <em>Hub Distance</em> empty.
+              </p>
+
+              <div class="divider"><span>INPUT</span></div>
+              <label for="baseline">Camera Baseline (cm)</label>
+              <input
+                type="number"
+                id="baseline"
+                name="baseline"
+                value="10"
+                step="0.1"
+                placeholder="Distance between cameras"
+              />
+
+              <div class="divider"><span>COMPUTED OUTPUTS</span></div>
+
+              <div class="flex-row">
+                <div class="flex-col">
+                  <label>Calc. Baseline Used (cm)</label>
+                  <input type="text" id="out_baseline" readonly />
+                </div>
+                <div class="flex-col">
+                  <label>Calc. Right Cam ↔ Hub (cm)</label>
+                  <input type="text" id="out_r_hub" readonly />
+                </div>
+              </div>
+
+              <label>Edge Lengths (Hub ↔ Spoke 1, 2, 3...)</label>
+              <input
+                type="text"
+                id="out_edges"
+                readonly
+                placeholder="Calculated lengths will appear here..."
+              />
+            </div>
+          </details>
+
+          <label for="num_disp">Disparity Search Range (pixels)</label>
+          <input
+            type="number"
+            id="num_disp"
+            name="num_disp"
+            value="96"
+            step="16"
+            min="16"
+            required
+          />
+          <div
+            style="
+              font-size: 0.8em;
+              color: #666;
+              margin-bottom: 15px;
+              margin-top: -10px;
+            "
+          >
+            Must be divisible by 16. Controls the blind zone width.
+          </div>
+
+          <label for="imageL">Left Image (Reference for Clicks)</label>
+          <input
+            type="file"
+            name="imageL"
+            id="imageL"
+            accept="image/*"
+            required
+          />
+
+          <label for="imageR">Right Image</label>
+          <input
+            type="file"
+            name="imageR"
+            id="imageR"
+            accept="image/*"
+            required
+          />
+        </div>
+
+        <div class="canvas-container" id="canvasWrapper">
+          <span class="placeholder-text">Left Image Preview</span>
+          <canvas id="image-canvas"></canvas>
+        </div>
+
+        <input type="hidden" id="points_data" name="points_data" />
+
+        <div class="button-container">
+          <button type="submit" id="calculate-btn" disabled>
+            Calculate Distances
+          </button>
+          <button type="button" id="reset-btn" class="secondary">
+            Reset Points
+          </button>
+        </div>
+      </form>
+
+      <div id="result-display"></div>
+      <div
+        id="disparity-display"
+        class="debug-image"
+        style="display: none"
+      ></div>
+    </div>
+
+    <script>
+      const form = document.getElementById("stereo-form");
+      const fileInputL = document.getElementById("imageL");
+      const canvas = document.getElementById("image-canvas");
+      const ctx = canvas.getContext("2d");
+      const calculateBtn = document.getElementById("calculate-btn");
+      const resetBtn = document.getElementById("reset-btn");
+      const resultDisplay = document.getElementById("result-display");
+      const disparityDisplay = document.getElementById("disparity-display");
+      const placeholder = document.querySelector(".placeholder-text");
+
+      // Advanced Inputs
+      const baselineInput = document.getElementById("baseline");
+      const hubDistInput = document.getElementById("hub_distance");
+      const outBaseline = document.getElementById("out_baseline");
+      const outRHub = document.getElementById("out_r_hub");
+      const outEdges = document.getElementById("out_edges");
+
+      let points = [];
+      let imgObj = null;
+
+      // Mutual exclusion logic for inputs
+      baselineInput.addEventListener("input", () => {
+        if (baselineInput.value) hubDistInput.value = "";
+      });
+      hubDistInput.addEventListener("input", () => {
+        if (hubDistInput.value) baselineInput.value = "";
+      });
+
+      // 1. Handle File Upload (Left Image Only for Canvas)
+      fileInputL.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            imgObj = new Image();
+            imgObj.onload = () => {
+              canvas.width = imgObj.width;
+              canvas.height = imgObj.height;
+              placeholder.style.display = "none";
+              resetPoints();
+            };
+            imgObj.src = event.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      // 2. Handle Clicks (Hub & Spoke Logic)
+      canvas.addEventListener("mousedown", (e) => {
+        if (!imgObj || points.length >= 4) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        points.push({ x: Math.round(x), y: Math.round(y) });
+        redraw();
+
+        if (points.length >= 2) {
+          document.getElementById("points_data").value = JSON.stringify(points);
+          calculateBtn.disabled = false;
+        }
+      });
+
+      // 3. Right Click Undo
+      canvas.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        if (points.length > 0) {
+          points.pop();
+          redraw();
+
+          document.getElementById("points_data").value = JSON.stringify(points);
+
+          if (points.length < 2) {
+            calculateBtn.disabled = true;
+            resultDisplay.className = "";
+            resultDisplay.textContent = "";
+          }
+        }
+      });
+
+      function redraw() {
+        if (!imgObj) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(imgObj, 0, 0);
+
+        if (points.length > 0) {
+          ctx.lineWidth = 3;
+
+          // Draw Hub (First Point)
+          const hub = points[0];
+          ctx.fillStyle = "#007bff";
+          ctx.beginPath();
+          ctx.arc(
+            hub.x,
+            hub.y,
+            Math.max(6, canvas.width * 0.006),
+            0,
+            2 * Math.PI,
+          );
+          ctx.fill();
+
+          // Draw Spokes
+          for (let i = 1; i < points.length; i++) {
+            const p = points[i];
+            ctx.strokeStyle = "yellow";
+            ctx.beginPath();
+            ctx.moveTo(hub.x, hub.y);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+
+            ctx.fillStyle = "red";
+            ctx.beginPath();
+            ctx.arc(
+              p.x,
+              p.y,
+              Math.max(5, canvas.width * 0.005),
+              0,
+              2 * Math.PI,
+            );
+            ctx.fill();
+          }
+        }
+      }
+
+      function resetPoints() {
+        points = [];
+        redraw();
+        calculateBtn.disabled = true;
+        document.getElementById("points_data").value = "";
+        resultDisplay.className = "";
+        resultDisplay.textContent = "";
+        disparityDisplay.style.display = "none";
+
+        // Clear advanced outputs
+        outBaseline.value = "";
+        outRHub.value = "";
+        outEdges.value = "";
+      }
+
+      resetBtn.addEventListener("click", resetPoints);
+
+      // 4. Submit
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        resultDisplay.className = "";
+        resultDisplay.textContent = "Computing 3D Distances...";
+        disparityDisplay.style.display = "none";
+
+        // Clear previous outputs
+        outBaseline.value = "Computing...";
+        outRHub.value = "Computing...";
+        outEdges.value = "Computing...";
+
+        const formData = new FormData(form);
+
+        try {
+          const response = await fetch("/calibrated_stereo", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await response.json();
+
+          if (data.error) {
+            resultDisplay.className = "result-box error";
+            resultDisplay.textContent = `Error: ${data.error}`;
+            outBaseline.value = "Error";
+            outRHub.value = "Error";
+            outEdges.value = "Error";
+          } else {
+            resultDisplay.className = "result-box success";
+
+            let listHtml = '<ul class="measurement-list">';
+            data.measurements.forEach((m) => {
+              if (m.error) {
+                listHtml += `<li><strong>Edge ${m.id}:</strong> Error (${m.error})</li>`;
+              } else {
+                listHtml += `<li><strong>Edge ${m.id}:</strong> ${m.length} cm <span style="font-size:0.8em; color:#555;">(Z: ${m.z_start} → ${m.z_end})</span></li>`;
+              }
+            });
+            listHtml += "</ul>";
+
+            resultDisplay.innerHTML = `<h3>Results</h3>${listHtml}`;
+
+            // Populate Educational Outputs
+            if (data.educational) {
+              outBaseline.value = data.educational.baseline_used;
+              outRHub.value = data.educational.dist_r_hub;
+              outEdges.value = data.educational.edges.join(", ");
+            }
+
+            if (data.disparity_b64) {
+              disparityDisplay.innerHTML = `<h4>Disparity Map (Search Range: ${data.used_num_disp}px)</h4><img src="data:image/jpeg;base64,${data.disparity_b64}">`;
+              disparityDisplay.style.display = "block";
+            }
+          }
+        } catch (err) {
+          resultDisplay.className = "result-box error";
+          resultDisplay.textContent = "An unexpected error occurred.";
+          console.error(err);
+        }
+      });
+    </script>
+  </body>
+</html>

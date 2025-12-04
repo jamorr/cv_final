@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panorama Stitching</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 0;
+        padding: 40px;
+      }
+      .container {
+        max-width: 900px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #444;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+      p.description {
+        text-align: center;
+        color: #666;
+        margin-bottom: 30px;
+      }
+
+      .form-section {
+        margin-bottom: 20px;
+        text-align: center;
+      }
+      label {
+        font-weight: bold;
+        display: block;
+        margin-bottom: 10px;
+      }
+
+      input[type="file"] {
+        width: 100%;
+        max-width: 500px;
+        padding: 8px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        background: #fafafa;
+      }
+
+      .button-container {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 20px;
+      }
+      button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      button.demo-btn {
+        background-color: #28a745;
+      }
+      button.demo-btn:hover {
+        background-color: #218838;
+      }
+
+      .prompt {
+        background-color: #e2e3e5;
+        color: #383d41;
+        padding: 15px;
+        border-radius: 4px;
+        text-align: center;
+        margin-top: 20px;
+        font-weight: bold;
+        border: 1px solid #d6d8db;
+      }
+
+      .image-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        justify-content: center;
+        margin-top: 20px;
+        padding: 15px;
+        background: #f9f9f9;
+        border-radius: 4px;
+        min-height: 50px;
+      }
+
+      .source-img-container {
+        position: relative;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .source-img-container:hover {
+        transform: scale(1.05);
+      }
+
+      /* Interactive mode styles */
+      .interactive .source-img-container {
+        border: 3px solid transparent;
+      }
+      .interactive .source-img-container:hover {
+        border: 3px solid #007bff;
+        border-radius: 6px;
+      }
+
+      .image-strip img {
+        height: 120px;
+        width: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        object-fit: contain;
+        background: white;
+        display: block;
+      }
+
+      .result-section {
+        text-align: center;
+        margin-top: 30px;
+        border-top: 2px dashed #eee;
+        padding-top: 20px;
+      }
+      .result-section img {
+        max-width: 100%;
+        height: auto;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .error {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+      .nav-link {
+        display: inline-block;
+        margin-bottom: 20px;
+        text-decoration: none;
+        color: #555;
+        font-weight: bold;
+      }
+      .nav-link:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <a href="/" class="nav-link">&larr; Back to Home</a>
+
+      <h1>Panorama Stitching</h1>
+      <a
+        ref="https://drive.google.com/file/d/1UAFDX6WYExq3l-e0OGg3ngvVPnO82noB/view?usp=sharing&t=273"
+        >DEMO</a
+      >
+      <p class="description">
+        Upload overlapping images, select a base reference, and stitch them
+        together.
+      </p>
+
+      {% if error %}
+      <div class="error">{{ error }}</div>
+      {% endif %}
+
+      <form method="POST" enctype="multipart/form-data" id="stitch-form">
+        <!-- Hidden inputs to persist session reference -->
+        {% if upload_id %}
+        <input type="hidden" name="upload_id" value="{{ upload_id }}" />
+        {% endif %}
+
+        <!-- Hidden input for the selected base index -->
+        <input type="hidden" name="base_index" id="base_index" />
+
+        <!-- Only show upload controls if we haven't selected images yet, or if we want to reset -->
+        {% if not selection_mode and not result_image %}
+        <div class="form-section">
+          <label for="images">Select Images (Ordered Left to Right):</label>
+          <input
+            type="file"
+            name="images"
+            id="images"
+            accept="image/*"
+            multiple
+          />
+        </div>
+
+        <div class="button-container">
+          <button type="submit">Upload Images</button>
+          <button type="submit" class="demo-btn" formnovalidate>
+            Try Demo
+          </button>
+        </div>
+        {% endif %}
+      </form>
+
+      <!-- Prompt for selection -->
+      {% if prompt and selection_mode %}
+      <div class="prompt">{{ prompt }}</div>
+      {% endif %}
+
+      <!-- Image Strip -->
+      {% if source_images %}
+      <div
+        class="section-title"
+        style="
+          margin-top: 30px;
+          text-align: center;
+          font-weight: bold;
+          color: #555;
+        "
+      >
+        {% if result_image %} Source Images (Red border indicates base) {% else
+        %} Uploaded Images {% endif %}
+      </div>
+
+      <div
+        class="image-strip {% if selection_mode %}interactive{% endif %}"
+        id="preview-strip"
+      >
+        {% for img_b64 in source_images %}
+        <div
+          class="source-img-container"
+          {%
+          if
+          selection_mode
+          %}onclick="selectBase({{ loop.index0 }})"
+          {%
+          endif
+          %}
+        >
+          <img
+            src="data:image/jpeg;base64,{{ img_b64 }}"
+            alt="Source Image {{ loop.index }}"
+          />
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %} {% if result_image %}
+      <div class="result-section">
+        <h2>Stitched Result</h2>
+        <img
+          src="data:image/jpeg;base64,{{ result_image }}"
+          alt="Stitched Panorama"
+        />
+        <br /><br />
+        <a href="/stitch"><button>Start Over</button></a>
+      </div>
+      {% endif %} {% if demo_image %}
+      <div class="demo-section">
+        <h2>Pixel Phone Stitched Result (demo)</h2>
+        <img
+          src="data:image/jpeg;base64,{{ demo_image }}"
+          alt="Stitched Panorama from Phone"
+        />
+      </div>
+      {% endif %}
+    </div>
+
+    <script>
+      function selectBase(index) {
+        // Set the hidden input value
+        document.getElementById("base_index").value = index;
+        // Submit the form
+        document.getElementById("stitch-form").submit();
+      }
+    </script>
+  </body>
+</html>

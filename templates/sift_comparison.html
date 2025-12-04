@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SIFT & RANSAC: Scratch vs OpenCV</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f0f2f5;
+        margin: 0;
+        padding: 20px;
+        color: #333;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        text-align: center;
+        color: #2c3e50;
+        margin-bottom: 30px;
+      }
+      .upload-section {
+        background: #e9ecef;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 30px;
+        text-align: center;
+      }
+      input[type="file"] {
+        margin: 10px;
+      }
+      button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 10px 25px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
+      }
+      button:hover {
+        background-color: #2980b9;
+      }
+
+      .comparison-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 20px;
+      }
+      .result-card {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .card-header {
+        padding: 15px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 1.2em;
+        color: white;
+      }
+      .header-cv {
+        background-color: #27ae60;
+      }
+      .header-scratch {
+        background-color: #e67e22;
+      }
+
+      .stats-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .stats-table td {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+      }
+      .stats-table tr:last-child td {
+        border-bottom: none;
+      }
+      .stats-label {
+        font-weight: bold;
+        color: #555;
+      }
+      .stats-val {
+        text-align: right;
+        font-family: monospace;
+        font-size: 1.1em;
+      }
+
+      .img-container {
+        padding: 10px;
+        text-align: center;
+        background: #fafafa;
+        border-top: 1px solid #eee;
+      }
+      .img-container img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+      }
+
+      .note {
+        text-align: center;
+        color: #7f8c8d;
+        font-size: 0.9em;
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <a href="/" style="text-decoration: none; color: #555; font-weight: bold"
+        >&larr; Back to Home</a
+      >
+
+      <h1>SIFT Feature Extraction & RANSAC Comparison</h1>
+      <a
+        ref="https://drive.google.com/file/d/1UAFDX6WYExq3l-e0OGg3ngvVPnO82noB/view?usp=sharing&t=316"
+        >DEMO</a
+      >
+      <div class="upload-section">
+        <form method="POST" enctype="multipart/form-data">
+          <label
+            ><strong>Image 1:</strong>
+            <input type="file" name="image1" required
+          /></label>
+          <label
+            ><strong>Image 2:</strong>
+            <input type="file" name="image2" required
+          /></label>
+          <br /><br />
+          <button type="submit">Run Comparison</button>
+        </form>
+      </div>
+
+      {% if results %}
+      <div class="comparison-grid">
+        <!-- OpenCV Card -->
+        <div class="result-card">
+          <div class="card-header header-cv">OpenCV Implementation</div>
+          <table class="stats-table">
+            <tr>
+              <td class="stats-label">Execution Time</td>
+              <td class="stats-val">{{ results.opencv.time }}</td>
+            </tr>
+            <tr>
+              <td class="stats-label">Keypoints (Img1)</td>
+              <td class="stats-val">{{ results.opencv.kps1 }}</td>
+            </tr>
+            <tr>
+              <td class="stats-label">Keypoints (Img2)</td>
+              <td class="stats-val">{{ results.opencv.kps2 }}</td>
+            </tr>
+            <tr>
+              <td class="stats-label">Raw Matches</td>
+              <td class="stats-val">{{ results.opencv.matches }}</td>
+            </tr>
+            <tr>
+              <td class="stats-label">RANSAC Inliers</td>
+              <td class="stats-val">{{ results.opencv.inliers }}</td>
+            </tr>
+          </table>
+          <div class="img-container">
+            <img
+              src="data:image/jpeg;base64,{{ results.opencv.img }}"
+              alt="OpenCV Results"
+            />
+          </div>
+        </div>
+
+        <!-- Scratch Card -->
+        <div class="result-card">
+          <div class="card-header header-scratch">Scratch Implementation</div>
+          <table class="stats-table">
+            <tr>
+              <td class="stats-label">Execution Time</td>
+              <td class="stats-val">{{ results.scratch.time }}</td>
+            </tr>
+            <tr>
+              <td class="stats-label">Keypoints (Img1)</td>
+              <td class="stats-val">{{ results.scratch.kps1 }}</td>
+            </tr>
+            <tr>
+              <td class="stats-label">Keypoints (Img2)</td>
+              <td class="stats-val">{{ results.scratch.kps2 }}</td>
+            </tr>
+            <tr>
+              <td class="stats-label">Raw Matches</td>
+              <td class="stats-val">{{ results.scratch.matches }}</td>
+            </tr>
+            <tr>
+              <td class="stats-label">RANSAC Inliers</td>
+              <td class="stats-val">{{ results.scratch.inliers }}</td>
+            </tr>
+          </table>
+          <div class="img-container">
+            <img
+              src="data:image/jpeg;base64,{{ results.scratch.img }}"
+              alt="Scratch Results"
+            />
+          </div>
+        </div>
+      </div>
+      {% endif %} {% if error %}
+      <div style="color: red; text-align: center; margin-top: 20px">
+        {{ error }}
+      </div>
+      {% endif %}
+    </div>
+  </body>
+</html>

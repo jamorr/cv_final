@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Template Matching & Gradient Analysis</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 0;
+        padding: 40px;
+      }
+      .container {
+        max-width: 1000px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #444;
+        text-align: center;
+      }
+      .form-section {
+        margin-bottom: 20px;
+      }
+      .upload-section {
+        display: flex;
+        gap: 20px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .upload-area {
+        flex: 1;
+        min-width: 300px;
+      }
+      label {
+        font-weight: bold;
+        display: block;
+        margin-bottom: 5px;
+      }
+      input[type="file"] {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      .btn-group {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin-top: 20px;
+      }
+      button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+      button.demo-btn {
+        background-color: #28a745;
+      }
+      button.demo-btn:hover {
+        background-color: #218838;
+      }
+
+      /* Result Areas */
+      #result-container {
+        margin-top: 20px;
+        border: 2px dashed #ccc;
+        min-height: 200px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #fafafa;
+        padding: 10px;
+      }
+      #result-image {
+        max-width: 100%;
+        height: auto;
+        display: none;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+      }
+      .legend {
+        font-size: 0.9em;
+        color: #666;
+        margin-bottom: 10px;
+        text-align: center;
+      }
+
+      /* Demo Grid */
+      .demo-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        gap: 20px;
+        width: 100%;
+        margin-top: 20px;
+      }
+      .demo-item {
+        background: white;
+        border: 1px solid #ddd;
+        padding: 10px;
+        border-radius: 4px;
+      }
+      .demo-item h4 {
+        margin: 0 0 10px 0;
+        font-size: 0.9em;
+        color: #555;
+        word-break: break-all;
+      }
+      .demo-item img {
+        width: 100%;
+        height: auto;
+        border: 1px solid #eee;
+      }
+
+      #error {
+        text-align: center;
+        font-size: 1.2em;
+        font-weight: bold;
+        margin-top: 20px;
+        color: #dc3545;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <a href="/" style="text-decoration: none; color: #555; font-weight: bold"
+        >&larr; Back to Home</a
+      >
+
+      <h1>Gradient & Laplacian Analysis</h1>
+      <a
+        ref="https://drive.google.com/file/d/1UAFDX6WYExq3l-e0OGg3ngvVPnO82noB/view?usp=sharing&t=182"
+        >DEMO</a
+      >
+
+      <p style="text-align: center">
+        Compare <b>Gradient Magnitude</b>, <b>Gradient Direction</b>, and
+        <b>Laplacian of Gaussian (LoG)</b>.
+      </p>
+
+      <form id="match-form" enctype="multipart/form-data">
+        <div class="upload-section">
+          <div class="upload-area">
+            <label for="mainImage">Main Image (Scene)</label>
+            <input
+              type="file"
+              name="mainImage"
+              id="mainImage"
+              accept="image/*"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button type="submit" id="detect-btn">Analyze Match</button>
+          <button type="button" id="demo-btn" class="demo-btn">Run Demo</button>
+        </div>
+      </form>
+
+      <div id="error"></div>
+
+      <div id="result-container">
+        <p id="placeholder-text" style="color: #999">
+          Results will appear here...
+        </p>
+
+        <!-- Single Match Result -->
+        <div
+          id="single-result-wrapper"
+          style="display: none; width: 100%; text-align: center"
+        >
+          <div class="legend">
+            Left: <b>Magnitude</b> (Bone) | Center: <b>Direction</b> (HSV) |
+            Right: <b>Laplacian</b> (Jet)
+          </div>
+          <img id="result-image" src="" alt="Analysis Result" />
+        </div>
+
+        <!-- Demo Grid Results -->
+        <div id="demo-results" class="demo-grid"></div>
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById("match-form");
+      const detectBtn = document.getElementById("detect-btn");
+      const demoBtn = document.getElementById("demo-btn");
+      const resultContainer = document.getElementById("result-container");
+      const singleResultWrapper = document.getElementById(
+        "single-result-wrapper",
+      );
+      const resultImage = document.getElementById("result-image");
+      const demoResultsDiv = document.getElementById("demo-results");
+      const errorDiv = document.getElementById("error");
+      const placeholderText = document.getElementById("placeholder-text");
+
+      // Handle Standard Template Match Analysis
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        resetUI();
+        detectBtn.disabled = true;
+        detectBtn.textContent = "Processing...";
+
+        const formData = new FormData(form);
+
+        try {
+          const response = await fetch("/gradient_match", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "An unknown error occurred.");
+          }
+
+          const imageBlob = await response.blob();
+          const imageUrl = URL.createObjectURL(imageBlob);
+
+          singleResultWrapper.style.display = "block";
+          resultImage.src = imageUrl;
+          resultImage.style.display = "block";
+        } catch (err) {
+          errorDiv.textContent = `Error: ${err.message}`;
+        } finally {
+          detectBtn.disabled = false;
+          detectBtn.textContent = "Analyze Match";
+        }
+      });
+
+      // Handle Demo Button
+      demoBtn.addEventListener("click", async () => {
+        resetUI();
+        demoBtn.disabled = true;
+        demoBtn.textContent = "Running Demo...";
+
+        try {
+          const response = await fetch("/gradient_match/demo", {
+            method: "POST",
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Demo failed.");
+          }
+
+          const data = await response.json();
+
+          if (data.results && data.results.length > 0) {
+            // Show Header
+            const header = document.createElement("div");
+            header.style.width = "100%";
+            header.style.gridColumn = "1 / -1";
+            header.innerHTML =
+              '<div class="legend">Processing all images in static/perspective...<br>Order: Magnitude | Direction | Laplacian</div>';
+            demoResultsDiv.appendChild(header);
+
+            data.results.forEach((item) => {
+              const div = document.createElement("div");
+              div.className = "demo-item";
+              div.innerHTML = `
+                        <h4>${item.filename}</h4>
+                        <img src="data:image/png;base64,${item.image}" />
+                    `;
+              demoResultsDiv.appendChild(div);
+            });
+          } else {
+            errorDiv.textContent = "No results returned.";
+          }
+        } catch (err) {
+          errorDiv.textContent = `Error: ${err.message}`;
+        } finally {
+          demoBtn.disabled = false;
+          demoBtn.textContent = "Run Demo (Static Folder)";
+        }
+      });
+
+      function resetUI() {
+        errorDiv.textContent = "";
+        placeholderText.style.display = "none";
+        singleResultWrapper.style.display = "none";
+        resultImage.src = "";
+        demoResultsDiv.innerHTML = "";
+      }
+    </script>
+  </body>
+</html>
